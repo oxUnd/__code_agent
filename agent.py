@@ -1,6 +1,6 @@
 from langchain_community.chat_models import ChatTongyi
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from tools import AgentTools
 
 class CodeAgent:
@@ -74,17 +74,41 @@ class CodeAgent:
                 # Append user message to history
                 self.messages.append(HumanMessage(content=user_input))
                 
-                # LangGraph agent expects a list of messages or a dict with "messages"
-                response = self.agent.invoke({"messages": self.messages})
-                
-                # The response is the state, which contains "messages"
-                # We want to print the last message content if it's from AI
-                messages = response["messages"]
-                if messages:
+                # Stream the response to show thinking process
+                for event in self.agent.stream({"messages": self.messages}, stream_mode="values"):
+                    messages = event["messages"]
+                    if not messages:
+                        continue
+                    
                     last_message = messages[-1]
-                    print(last_message.content)
-                    # Append agent response to history
-                    self.messages.append(last_message)
+                    
+                    # Skip HumanMessage (user input)
+                    if isinstance(last_message, HumanMessage):
+                        continue
+                        
+                    # Handle AI Message (Thinking or Final Answer)
+                    if isinstance(last_message, AIMessage):
+                        if last_message.tool_calls:
+                            print("\n🧠 Thinking...")
+                            for tool_call in last_message.tool_calls:
+                                print(f"  👉 Call Tool: {tool_call['name']}")
+                                print(f"     Args: {tool_call['args']}")
+                        elif last_message.content:
+                            print(f"\n🤖 Response:\n{last_message.content}")
+                            
+                    # Handle Tool Message (Tool Output)
+                    elif isinstance(last_message, ToolMessage):
+                        print(f"\n🔧 Tool Output ({last_message.name}):")
+                        # Truncate long output for display if needed, but for now show all
+                        content = str(last_message.content)
+                        if len(content) > 500:
+                            print(f"{content[:500]}... (truncated)")
+                        else:
+                            print(content)
+
+                # Update history with the final state
+                # The last event contains the full history including new messages
+                self.messages = messages
             except Exception as e:
                 print(f"Error: {e}")
             except Exception as e:
