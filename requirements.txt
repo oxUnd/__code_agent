@@ -1,0 +1,5 @@
+langchain
+langchain-community
+dashscope
+python-dotenv
+pydantic
