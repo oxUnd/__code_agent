@@ -3,3 +3,5 @@ langchain-community
 dashscope
 python-dotenv
 pydantic
+requests
+beautifulsoup4

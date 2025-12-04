@@ -1,3 +1,4 @@
+import os
 from langchain_community.chat_models import ChatTongyi
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -5,6 +6,7 @@ from tools import AgentTools
 
 class CodeAgent:
     def __init__(self):
+        self.project_directory = self.getProjectDirectory()
         self.llm = ChatTongyi(model="qwen-max")
         self.tools = [
             AgentTools.scan_directory,
@@ -12,19 +14,29 @@ class CodeAgent:
             AgentTools.run_command,
             AgentTools.generate_diff,
             AgentTools.write_file,
-            AgentTools.execute_code
+            AgentTools.execute_code,
+            AgentTools.fetch_url,
         ]
         # System message is passed via state_modifier or messages in invoke, 
         # but create_react_agent accepts a state_modifier (string or function)
-        self.system_message = """You are a reliable and secure code agent designed to assist with file scanning, code reading, command execution, and code compilation/running.
+        self.system_message = f"""You are a reliable and secure code agent designed to assist with file scanning, code reading, web searching, command execution, and code compilation/running.
                 Core Responsibilities & Boundaries:
                 - Only operate on files/directories explicitly authorized by the user; never modify/delete system files or unauthorized content.
                 - Prioritize safety: refuse to execute high-risk commands (e.g., rm -rf, format, sudo without user confirmation).
                 - Follow user instructions strictly: do not add irrelevant features or modify code beyond the requested scope.
+                - Language Matching Rule (Mandatory): Strictly use the programming language corresponding to the file suffix for all code writing/modifications. Never mix syntax of different languages in a single file.
+                  - .py → Python (adhere to PEP8 standards)
+                  - .cpp → C++ (adhere to C++17+ standards, use modern syntax)
+                  - .c → C (adhere to C99 standards)
+                  - .go → Go (adhere to Go official style guide: gofmt compliant)
+                  - .js → JavaScript (adhere to ES6+ standards, avoid deprecated syntax)
+                - Project directory is {self.project_directory}.
 
                 WORKFLOW (Must Follow Step-by-Step):
                 1. Context Collection:
-                   - If the task involves existing files, first call `scan_directory` (to list files) or `read_file` (to get content) to understand the current context.
+                   - If the task involves existing files, project directory is {self.project_directory}, first call `scan_directory` (to list files) or `read_file` (to get content) to understand the current context.
+                   - If the user provides a URL, use `fetch_url` to fetch the content of the page to understand the context.
+                   - If the user asks a question that requires external knowledge or current events, use `fetch_url` to search using a search engine (e.g., https://www.google.com/search?q=query or https://www.bing.com/search?q=query).
                    - After collecting context, briefly summarize key information (e.g., "Found 3 Python files: main.py, utils.py, config.py") for user clarity.
 
                 2. Code Generation (If Task Requires Writing/Modifying Code):
@@ -111,5 +123,8 @@ class CodeAgent:
                 self.messages = messages
             except Exception as e:
                 print(f"Error: {e}")
-            except Exception as e:
-                print(f"Error: {e}")
+    def getProjectDirectory(self) -> str:
+        """ Get Project Directory"""
+        if os.getenv('PROJECT_DIRECTORY') != None:
+            return os.getenv('PROJECT_DIRECTORY') 
+        return os.getcwd()
